@@ -10,7 +10,12 @@
   html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#0b1016;
     font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
   #app { position:fixed; inset:0; }
-  canvas { display:block; width:100%; height:100%; }
+  /* 手机上必须禁用浏览器自己的手势，否则单指拖拽会被当成滚动页面，
+     游戏根本收不到 pointermove */
+  canvas { display:block; width:100%; height:100%;
+           touch-action:none; -ms-touch-action:none;
+           -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
+  #app { touch-action:none; overscroll-behavior:none; }
 
   /* ---------- HUD ---------- */
   #hud { position:fixed; inset:0; pointer-events:none; z-index:5;
@@ -32,10 +37,14 @@
   @media (pointer: coarse) {
     #hint .keys { display:none; }
     #hint .touch { display:inline; }
-    #hint { font-size:11px; letter-spacing:.12em; }
-    #weather { top:18px; left:18px; }
-    #bloomCount { top:18px; right:18px; }
+    /* 竖屏手机只有 390 点宽：提示必须换行，否则两头会被裁掉 */
+    #hint { font-size:11px; letter-spacing:.10em; white-space:normal; line-height:2.0;
+            width:calc(100vw - 40px); max-width:330px;
+            bottom:calc(16px + env(safe-area-inset-bottom, 0px)); }
+    #weather { top:calc(14px + env(safe-area-inset-top, 0px)); left:calc(14px + env(safe-area-inset-left, 0px)); }
+    #bloomCount { top:calc(14px + env(safe-area-inset-top, 0px)); right:calc(14px + env(safe-area-inset-right, 0px)); }
     #intro h1 { font-size:48px; }
+    #toast { font-size:24px; }
   }
   #toast { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:6;
            color:#fff; font-size:30px; font-weight:200; letter-spacing:.5em; text-indent:.5em;
@@ -81,8 +90,7 @@
     <span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 拖拽 引导花瓣 &nbsp;·&nbsp;
     <kbd>Shift</kbd> 疾风 &nbsp;·&nbsp; <kbd>空格</kbd> 停驻·近景 &nbsp;·&nbsp;
     <kbd>R</kbd>/<kbd>F</kbd> 升降 &nbsp;·&nbsp; <kbd>C</kbd> 天气 &nbsp;·&nbsp; <kbd>H</kbd> 隐藏界面</span>
-    <span class="touch">单指拖拽 引导花瓣 &nbsp;·&nbsp; 松开 停驻·近景 &nbsp;·&nbsp;
-    双指 转视角 &nbsp;·&nbsp; 点左上角 换天气</span>
+    <span class="touch">单指拖拽 引导花瓣 · 松开 停驻近景<br>双指 转视角 · 点左上角 换天气</span>
   </div>
 </div>
 <div id="toast"></div>

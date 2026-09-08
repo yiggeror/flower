@@ -204,7 +204,9 @@ export class PostFX {
     ud.uTexel.value.set(1 / this.width, 1 / this.height);
     ud.uFocus.value = rig ? rig.focusDistance : 12;
     ud.uAperture.value = rig ? rig.aperture : 0.2;
-    ud.uMaxCoc.value = Math.max(6, this.height * 0.026);
+    // 按短边算并封顶：竖屏手机的高度是宽度的两倍多，
+    // 若按高度算，背景会被糊成一片。
+    ud.uMaxCoc.value = Math.min(22, Math.max(6, Math.min(this.width, this.height) * 0.026));
     this._blit(this.mDof, this.rtB);
 
     // 5) 泛光

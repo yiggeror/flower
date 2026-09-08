@@ -58,8 +58,9 @@ class Game {
 
     // 画质档位
     const coarse = matchMedia('(pointer: coarse)').matches;
-    this.tier = has('tier') ? num('tier', 3) : (coarse ? 1 : 3);
-    this.maxTier = this.tier;
+    // 手机从最低档起步，跑得动再自己往上升 —— 宁可一开始朴素也别一开始就卡
+    this.tier = has('tier') ? num('tier', 3) : (coarse ? 0 : 3);
+    this.maxTier = has('tier') ? this.tier : 3;
     this.frameAvg = 16;
     this.tierCooldown = 3;
 
@@ -246,7 +247,7 @@ class Game {
     this.tierCooldown -= dt;
     if (this.tierCooldown > 0) return;
     if (this.frameAvg > 32 && this.tier > 0) { this.applyTier(this.tier - 1); this.tierCooldown = 4; }
-    else if (this.frameAvg < 13 && this.tier < this.maxTier) { this.applyTier(this.tier + 1); this.tierCooldown = 8; }
+    else if (this.frameAvg < 18 && this.tier < this.maxTier) { this.applyTier(this.tier + 1); this.tierCooldown = 8; }
   }
 
   loop() {

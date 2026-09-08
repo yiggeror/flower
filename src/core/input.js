@@ -32,7 +32,7 @@ export class Input {
       dragging = true; this.pointerActive = true;
       lastX = startX = e.clientX; lastY = startY = e.clientY;
       steerMode = isTouch() && e.isPrimary;
-      dom.setPointerCapture(e.pointerId);
+      try { dom.setPointerCapture(e.pointerId); } catch (err) { /* 某些浏览器/合成事件会抛，不影响操作 */ }
       this.anyInput = true;
     });
     dom.addEventListener('pointermove', (e) => {
