@@ -157,6 +157,10 @@ class Game {
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toast.classList.remove('show'), 1700);
     };
+    // 触屏上没有键盘：点左上角的天气也能切换
+    document.getElementById('weather').addEventListener('click', () => {
+      this.showToast(this.weather.next().name);
+    });
     this.input.onKey = (code) => {
       if (code === 'KeyC') { const p = this.weather.next(); this.showToast(p.name); }
       else if (code === 'KeyH') hud.classList.toggle('on');

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>花 · Flower — 飘浮花瓣的旅途</title>
+<title>花 · Flower</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌸</text></svg>" />
 <style>
   :root { color-scheme: dark; }
@@ -17,7 +17,10 @@
          opacity:0; transition:opacity 1.6s ease 0.4s; }
   #hud.on { opacity:1; }
   .corner { position:absolute; color:#fff; text-shadow:0 1px 12px rgba(0,0,0,.55); user-select:none; }
-  #weather { top:26px; left:30px; font-size:13px; letter-spacing:.22em; opacity:.72; font-weight:300; }
+  #weather { top:26px; left:30px; font-size:13px; letter-spacing:.22em; opacity:.72; font-weight:300;
+             pointer-events:auto; cursor:pointer; padding:6px 10px; margin:-6px -10px; border-radius:4px;
+             -webkit-tap-highlight-color:transparent; transition:background .25s ease; }
+  #weather:hover, #weather:active { background:rgba(255,255,255,.10); }
   #weather b { display:block; font-size:23px; letter-spacing:.32em; font-weight:300; margin-bottom:5px; opacity:.95; }
   #bloomCount { top:26px; right:30px; text-align:right; font-size:12px; letter-spacing:.2em; opacity:.6; font-weight:300; }
   #bloomCount b { display:block; font-size:26px; font-weight:200; letter-spacing:.06em; opacity:.95; margin-bottom:2px;
@@ -25,6 +28,15 @@
   #hint { bottom:24px; left:50%; transform:translateX(-50%); font-size:12px; letter-spacing:.19em;
           opacity:.42; font-weight:300; white-space:nowrap; text-align:center; }
   #hint kbd { font:inherit; border:1px solid rgba(255,255,255,.35); border-radius:4px; padding:1px 6px; margin:0 1px; }
+  #hint .touch { display:none; }
+  @media (pointer: coarse) {
+    #hint .keys { display:none; }
+    #hint .touch { display:inline; }
+    #hint { font-size:11px; letter-spacing:.12em; }
+    #weather { top:18px; left:18px; }
+    #bloomCount { top:18px; right:18px; }
+    #intro h1 { font-size:48px; }
+  }
   #toast { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:6;
            color:#fff; font-size:30px; font-weight:200; letter-spacing:.5em; text-indent:.5em;
            text-shadow:0 2px 30px rgba(0,0,0,.6); opacity:0; pointer-events:none;
@@ -66,9 +78,11 @@
   <div class="corner" id="weather"><b>晴</b><span>微风</span></div>
   <div class="corner" id="bloomCount"><b>0</b><span>朵花已绽放</span></div>
   <div class="corner" id="hint">
-    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 拖拽 引导花瓣 &nbsp;·&nbsp;
+    <span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 拖拽 引导花瓣 &nbsp;·&nbsp;
     <kbd>Shift</kbd> 疾风 &nbsp;·&nbsp; <kbd>空格</kbd> 停驻·近景 &nbsp;·&nbsp;
-    <kbd>R</kbd>/<kbd>F</kbd> 升降 &nbsp;·&nbsp; <kbd>C</kbd> 天气 &nbsp;·&nbsp; <kbd>H</kbd> 隐藏界面
+    <kbd>R</kbd>/<kbd>F</kbd> 升降 &nbsp;·&nbsp; <kbd>C</kbd> 天气 &nbsp;·&nbsp; <kbd>H</kbd> 隐藏界面</span>
+    <span class="touch">单指拖拽 引导花瓣 &nbsp;·&nbsp; 松开 停驻·近景 &nbsp;·&nbsp;
+    双指 转视角 &nbsp;·&nbsp; 点左上角 换天气</span>
   </div>
 </div>
 <div id="toast"></div>
