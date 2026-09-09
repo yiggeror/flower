@@ -1,0 +1,14 @@
+{
+  "name": "flower",
+  "version": "1.0.0",
+  "private": true,
+  "description": "《花》— 网页端 3D 体验：一群飘浮的花瓣掠过草原，所到之处开出花来",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes http-server -p 8080 -c-1 ."
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "three": "0.180.0"
+  }
+}
