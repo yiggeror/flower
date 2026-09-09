@@ -12,7 +12,11 @@
 
 ## 玩
 
-**在线**：https://yiggeror.github.io/flower/ （推到 `main` 后由 GitHub Actions 自动部署）
+**在线**：https://yiggeror.github.io/flower/
+
+站点由 GitHub Pages 托管，绑定在 `gh-pages` 分支上。
+推到 `main` 会触发 `.github/workflows/pages.yml`：打包 → 组装站点 → 强推 `gh-pages`，
+GitHub 随后自动重新构建。
 
 **单文件**：`dist/flower.html` —— 整个游戏打包成一个 HTML，双击即可运行，
 不需要服务器也不需要联网。站点上也提供在 `/download/flower.html`。
