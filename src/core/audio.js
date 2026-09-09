@@ -74,7 +74,7 @@ export class Ambience {
     rumbleCut.connect(comp);
     comp.connect(ctx.destination);
     this.comp = comp;
-    this.master.gain.setTargetAtTime(1.15, ctx.currentTime, 1.6);
+    this.master.gain.setTargetAtTime(1.05, ctx.currentTime, 1.6);
 
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 2048;
@@ -455,35 +455,40 @@ export class Ambience {
     const now = ctx.currentTime;
     const amb = AMBIENCE[Math.max(0, Math.min(AMBIENCE.length - 1, s.weatherIndex | 0))];
 
+    const r = Math.max(0, Math.min(1, s.rain));
+
     // ---- 阵风：随机游走，叠加场景风力与飞行速度 ----
     if (Math.random() < dt * 0.55) this._gustTarget = 0.25 + Math.random() * 0.75;
     this._gust += (this._gustTarget - this._gust) * Math.min(1, dt * 0.7);
     const w = Math.max(0, s.windStrength);
     const motion = Math.min(s.speed / 20, 1);
-    const gust = this._gust * (0.45 + w * 0.45) + motion * 0.30;
+    // 风力对音量的影响收窄：原来 0.45~1.42 的跨度太大，大风天会盖过一切
+    const gust = this._gust * (0.50 + Math.min(w, 2.2) * 0.18) + motion * 0.22;
+
+    // 下雨时风退到雨后面。两者都是宽带噪声，等量叠加只会糊成一片吵。
+    const rainDuck = 1 - 0.66 * r;
 
     const hasWind = !!this.sampleGain.wind;
-    this.windLowGain.gain.setTargetAtTime(hasWind ? 0 : 0.032 + gust * 0.072, now, 0.35);
-    this.windHissGain.gain.setTargetAtTime(hasWind ? 0 : 0.028 + gust * 0.078, now, 0.30);
+    this.windLowGain.gain.setTargetAtTime(hasWind ? 0 : (0.034 + gust * 0.046) * rainDuck, now, 0.35);
+    this.windHissGain.gain.setTargetAtTime(hasWind ? 0 : (0.028 + gust * 0.048) * rainDuck, now, 0.30);
     this.windBP.frequency.setTargetAtTime(
       (600 + gust * 1150 + motion * 520) * amb.tone, now, 0.4);
     this.windWhistleGain.gain.setTargetAtTime(
-      hasWind ? 0 : Math.max(0, gust - 0.50) * 0.020 * amb.whistle, now, 0.5);
+      hasWind ? 0 : Math.max(0, gust - 0.55) * 0.016 * amb.whistle * rainDuck, now, 0.5);
     if (hasWind) {
-      this.sampleGain.wind.gain.setTargetAtTime(0.16 + gust * 0.42, now, 0.35);
+      this.sampleGain.wind.gain.setTargetAtTime((0.16 + gust * 0.42) * rainDuck, now, 0.35);
       this.sampleFilter.wind.frequency.setTargetAtTime(
         (1100 + gust * 5200 + motion * 1500) * amb.tone, now, 0.4);
     }
 
     // ---- 雨：雨势本身也会一阵大一阵小 ----
-    const r = Math.max(0, Math.min(1, s.rain));
     if (Math.random() < dt * 0.25) this._rainSwellTarget = 0.62 + Math.random() * 0.55;
     this._rainSwell += (this._rainSwellTarget - this._rainSwell) * Math.min(1, dt * 0.35);
     const rs = r * this._rainSwell;
     const hasRain = !!this.sampleGain.rain;
-    this.rainGain.gain.setTargetAtTime(hasRain ? 0 : rs * 0.090, now, 0.7);
-    this.rainDropGain.gain.setTargetAtTime(hasRain ? 0 : rs * 0.125, now, 0.7);
-    this.rainFarGain.gain.setTargetAtTime(hasRain ? 0 : r * 0.055, now, 1.2);
+    this.rainGain.gain.setTargetAtTime(hasRain ? 0 : rs * 0.078, now, 0.7);
+    this.rainDropGain.gain.setTargetAtTime(hasRain ? 0 : rs * 0.104, now, 0.7);
+    this.rainFarGain.gain.setTargetAtTime(hasRain ? 0 : r * 0.045, now, 1.2);
     if (hasRain) {
       this.sampleGain.rain.gain.setTargetAtTime(rs * 0.85, now, 0.7);
       this.sampleFilter.rain.frequency.setTargetAtTime(2200 + rs * 5000, now, 0.9);
@@ -522,7 +527,7 @@ export class Ambience {
   setMuted(m) {
     this.muted = m;
     if (this.ctx && this.master) {
-      this.master.gain.setTargetAtTime(m ? 0.0 : 1.15, this.ctx.currentTime, 0.25);
+      this.master.gain.setTargetAtTime(m ? 0.0 : 1.05, this.ctx.currentTime, 0.25);
     }
   }
 

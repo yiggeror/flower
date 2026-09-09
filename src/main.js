@@ -85,7 +85,7 @@ class Game {
     this.scene.add(this.sky);
 
     status('正在等待花开…'); progress(0.38); await frame();
-    this.bloomMap = new BloomMap(this.renderer, { size: 1024, world: env.worldSize });
+    this.bloomMap = new BloomMap(this.renderer, { size: 1280, world: env.worldSize });
     env.uniforms.uBloomMap.value = this.bloomMap.texture;
     env.uniforms.uBloomWorld.value = env.worldSize;
 
@@ -222,6 +222,13 @@ class Game {
         this.bloomMap.splat(p.x, p.z, 2.6, 1.2 * dt);
       }
       this.bloomArea += this.flock.speed * dt * 7.5;
+
+      // 被边界带回来时提示一次，别让人以为是卡住了
+      this._edgeCd = Math.max(0, (this._edgeCd || 0) - dt);
+      if (this.flock.atBoundary > 0.6 && this._edgeCd === 0 && this.showToast) {
+        this.showToast('风把花瓣托了回来');
+        this._edgeCd = 22;
+      }
     }
   }
 
