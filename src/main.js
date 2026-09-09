@@ -280,8 +280,6 @@ class Game {
         rain: this.weather ? this.weather.rainAmount : 0,
         flash: this.weather ? this.weather.flash : 0,
         weatherIndex: this.weather ? this.weather.targetIndex : 0,
-        bloomArea: this.bloomArea,
-        settle: this.rig ? this.rig.settle : 0,
       });
     }
   }
