@@ -127,6 +127,8 @@ function petalGeometry(nu = 10, nv = 5) {
   return g;
 }
 
+const nxSafe = (v, r) => (r > 1e-4 ? v / r : 0);
+
 const PALETTE = [
   0xff8fa8, 0xff6f8e, 0xffb3c1, 0xff9d76, 0xffd08a,
   0xfff0e0, 0xff7f6b, 0xf7a1c4, 0xffc4a3, 0xff5f7a,
@@ -216,6 +218,7 @@ export class PetalFlock {
     this.mesh.name = 'petals';
     this.mesh.frustumCulled = false;
 
+    this.atBoundary = 0;
     this.centroid = new THREE.Vector3().copy(this.pos);
     this._tmp = new THREE.Vector3();
     this._q = new THREE.Quaternion();
@@ -291,13 +294,25 @@ export class PetalFlock {
 
     this.pos.addScaledVector(this.vel, dt);
 
-    // 世界边界：柔和地推回来
+    // 世界边界：不是一堵墙，而是越靠近越强的回旋风。
+    // 原来只在越界那一刻沿半径硬推，结果是"朝外走不动、左右还能动"，
+    // 玩家会以为撞到了看不见的墙。现在提前 70m 就开始把你温柔地带回来。
     const r = Math.hypot(this.pos.x, this.pos.z);
-    if (r > env.playRadius) {
-      const k = (r - env.playRadius) * 0.06;
-      this.pos.x -= (this.pos.x / r) * k;
-      this.pos.z -= (this.pos.z / r) * k;
-      this.vel.x *= 0.94; this.vel.z *= 0.94;
+    const soft = env.playRadius - 70;
+    if (r > soft) {
+      const k = Math.min(1, (r - soft) / 70);
+      const nx = this.pos.x / r, nz = this.pos.z / r;
+      this.vel.x -= nx * k * k * 22.0 * dt;
+      this.vel.z -= nz * k * k * 22.0 * dt;
+      this.atBoundary = k;
+    } else {
+      this.atBoundary = 0;
+    }
+    if (r > env.playRadius) {          // 最后的止损，正常玩不到这里
+      const k = (r - env.playRadius) * 0.05;
+      this.pos.x -= nxSafe(this.pos.x, r) * k;
+      this.pos.z -= nxSafe(this.pos.z, r) * k;
+      this.vel.x *= 0.96; this.vel.z *= 0.96;
     }
 
     this.speed = Math.hypot(this.vel.x, this.vel.z);

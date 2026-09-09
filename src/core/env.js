@@ -9,9 +9,11 @@ const u = (value) => ({ value });
 
 export const env = {
   // --- 世界尺度 ---
-  worldSize: 512,          // 地形边长（米）
-  hfRes: 513,              // 高度场分辨率（顶点数 = worldSize/1m + 1）
-  playRadius: 205,         // 玩家活动半径
+  // 世界放大到 768m：高度场分辨率不变（网格间距从 1m 变成 1.5m），
+  // 地形网格顶点数也不变 —— 面积是原来的 2.25 倍，渲染开销却一样。
+  worldSize: 768,          // 地形边长（米）
+  hfRes: 513,              // 高度场分辨率（网格间距 = worldSize / (hfRes-1) = 1.5m）
+  playRadius: 320,         // 玩家活动半径
 
   // --- 时间 ---
   time: 0,                 // 场景总时间（秒）
