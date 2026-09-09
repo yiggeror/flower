@@ -85,7 +85,9 @@ void main(){
   vec3 outc = col * (diffuse + amb + trans) * 0.42;
 
   // 边缘透亮 + 一点自发光，让它在泛光里发出柔和的光晕
-  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.2);
+  // 注意 clamp：dot(N,V) 可能因浮点误差略大于 1，底数变负会让 pow 产生 NaN，
+  // NaN 会被泛光的降采样链扩散成整块黑斑。
+  float rim = pow(clamp(1.0 - clamp(dot(N, V), 0.0, 1.0), 0.0, 1.0), 2.2);
   outc += col * rim * 0.35 * (0.4 + viewBack);
   outc += col * 0.10;
 

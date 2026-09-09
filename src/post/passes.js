@@ -2,7 +2,7 @@
 // passes.js — 后期通道的着色器。
 // 体积云与地面雾气在半分辨率里光线步进；随后是景深、泛光、电影调色。
 // -----------------------------------------------------------------------------
-import { ENV_UNIFORMS, NOISE, CLOUD, ATMOS, COLORSPACE } from '../shaders/common.js';
+import { ENV_UNIFORMS, NOISE, CLOUD, ATMOS, COLORSPACE, SANITIZE } from '../shaders/common.js';
 
 export const QUAD_VERT = /* glsl */`
 varying vec2 vUv;
@@ -39,6 +39,7 @@ ${NOISE}
 ${CLOUD}
 ${ATMOS}
 ${DEPTH_UTIL}
+${SANITIZE}
 varying vec2 vUv;
 
 uniform float uCloudSteps;
@@ -185,7 +186,7 @@ void main(){
     T = mix(1.0, T, f);
   }
 
-  gl_FragColor = vec4(scatter, T);
+  gl_FragColor = vec4(sanitize(scatter), (T == T) ? clamp(T, 0.0, 1.0) : 1.0);
 }
 `;
 
@@ -198,6 +199,7 @@ ${ENV_UNIFORMS}
 ${NOISE}
 ${ATMOS}
 ${DEPTH_UTIL}
+${SANITIZE}
 varying vec2 vUv;
 uniform sampler2D tDiffuse;
 uniform sampler2D tAtmos;
@@ -208,7 +210,7 @@ void main(){
   // 深度引导的上采样：沿深度不连续处退回最近的相似样本，避免云雾"漏"到前景边缘上
   vec4 a = texture2D(tAtmos, vUv);
   col = col * a.a + a.rgb;
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(max(sanitize(col), vec3(0.0)), 1.0);
 }
 `;
 
@@ -218,6 +220,7 @@ void main(){
 export const DOF_FRAG = /* glsl */`
 precision highp float;
 ${DEPTH_UTIL}
+${SANITIZE}
 varying vec2 vUv;
 uniform sampler2D tDiffuse;
 uniform vec2  uTexel;
@@ -261,18 +264,21 @@ void main(){
       wsum += w;
     }
   }
-  gl_FragColor = vec4(sum / wsum, 1.0);
+  gl_FragColor = vec4(sanitize(sum / wsum), 1.0);
 }
 `;
 
 export const BRIGHT_FRAG = /* glsl */`
 precision highp float;
+${SANITIZE}
 varying vec2 vUv;
 uniform sampler2D tDiffuse;
 uniform float uThreshold;
 uniform float uSoft;
 void main(){
-  vec3 c = texture2D(tDiffuse, vUv).rgb;
+  // 在这里净化最关键：泛光的降采样会把一个 NaN 像素摊成一整块黑斑
+  // 同时挡住负值：负数经 ACES 会被压成 0，最终表现同样是一块黑
+  vec3 c = clamp(sanitize(texture2D(tDiffuse, vUv).rgb), vec3(0.0), vec3(64.0));
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   float k = smoothstep(uThreshold, uThreshold + uSoft, l);
   gl_FragColor = vec4(c * k, 1.0);
@@ -319,6 +325,7 @@ void main(){
 export const GRADE_FRAG = /* glsl */`
 precision highp float;
 ${COLORSPACE}
+${SANITIZE}
 varying vec2 vUv;
 uniform sampler2D tDiffuse;
 uniform sampler2D tBloom;
@@ -348,7 +355,8 @@ void main(){
   col.g = texture2D(tDiffuse, uv).g;
   col.b = texture2D(tDiffuse, uv + d * ca).b;
 
-  col += texture2D(tBloom, uv).rgb * uBloomStrength;
+  col = max(sanitize(col), vec3(0.0));
+  col += max(sanitize(texture2D(tBloom, uv).rgb), vec3(0.0)) * uBloomStrength;
 
   col *= uExposureG;
   col = acesTonemap(col);

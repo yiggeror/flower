@@ -135,7 +135,7 @@ void main(){
 
   vec3 outc = col * (diffuse + amb + sss) * ao * 0.50;
   if (vPart > 1.5) outc += col * 0.20;                    // 花心一点点自发光
-  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+  float rim = pow(clamp(1.0 - clamp(dot(N, V), 0.0, 1.0), 0.0, 1.0), 2.5);
   outc += col * rim * 0.10;
 
   outc = applyAtmosphere(outc, vWorld, uCamPos);

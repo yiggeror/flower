@@ -48,10 +48,11 @@ void main(){
   vec3  gnorm = normalize(vec3(hs.g, sqrt(max(1.0 - hs.g*hs.g - hs.b*hs.b, 0.02)), hs.b));
   float wet = hs.a;
 
-  // 陡坡不长草；噪声形成疏密斑块
-  float slopeOk = smoothstep(0.55, 0.86, gnorm.y);
+  // 陡坡少长草；噪声形成疏密斑块 —— 但要给个下限。
+  // 原来是从 0 起跳，噪声低谷处整片变秃，看起来像"有的地方完全没草"。
+  float slopeOk = mix(0.30, 1.0, smoothstep(0.42, 0.80, gnorm.y));
   float dens = fbm2n(w * 0.021 + 5.0, 3);
-  float densOk = smoothstep(0.30, 0.52, dens + aRand.w * 0.22);
+  float densOk = mix(0.58, 1.0, smoothstep(0.24, 0.52, dens + aRand.w * 0.24));
 
   float bloom = bloomAt(w);
   float t = position.y;
@@ -59,7 +60,7 @@ void main(){
   float height = uBladeH * (0.62 + aRand.y * 0.75) * (0.82 + wet * 0.42);
   height *= fade * slopeOk * densOk;
   // 花开之处草略矮一点，让花冒出来
-  height *= mix(1.0, 0.68, smoothstep(0.10, 0.75, bloom));
+  height *= mix(1.0, 0.84, smoothstep(0.10, 0.75, bloom));
 
   float width = uWidth * (0.72 + aRand.z * 0.75) * (0.85 + height * 0.15);
 
@@ -265,6 +266,20 @@ export class Grass {
     this.mesh.name = 'grass';
     this.mesh.frustumCulled = false;
     this.count = count;
+    this.baseWidth = width;
+    this.baseBladeH = bladeH;
+  }
+
+  /**
+   * 降档时按比例减少实例数。同时把草叶加宽、略加高来补偿覆盖率 ——
+   * 否则低画质下草地会明显发秃、露出大片地面。
+   */
+  setDensityScale(f) {
+    f = Math.max(0.05, Math.min(1, f));
+    const k = Math.pow(1 / f, 0.38);
+    this.mat.uniforms.uWidth.value = this.baseWidth * Math.min(k, 2.1);
+    this.mat.uniforms.uBladeH.value = this.baseBladeH * Math.min(1 + (k - 1) * 0.34, 1.32);
+    this.mesh.geometry.instanceCount = Math.round(this.count * f);
   }
 
   update(playerX, playerZ) {

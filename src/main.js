@@ -15,6 +15,7 @@ import { PetalFlock } from './entities/petals.js';
 import { Input } from './core/input.js';
 import { CameraRig } from './core/camerarig.js';
 import { PostFX } from './post/composer.js';
+import { Ambience } from './core/audio.js';
 
 const qs = new URLSearchParams(location.search);
 const num = (k, d) => (qs.has(k) ? parseFloat(qs.get(k)) : d);
@@ -26,7 +27,7 @@ const frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r,
 
 // 画质档位：手机与低端 GPU 会自动降档，高端则升回来
 const TIERS = [
-  { grass: 0.30, flowers: 0.34, atmos: 0.34, csteps: 18, lsteps: 3, msteps: 8,  rain: 0.4 },
+  { grass: 0.38, flowers: 0.38, atmos: 0.34, csteps: 18, lsteps: 3, msteps: 8,  rain: 0.4 },
   { grass: 0.52, flowers: 0.55, atmos: 0.40, csteps: 24, lsteps: 4, msteps: 10, rain: 0.6 },
   { grass: 0.76, flowers: 0.78, atmos: 0.46, csteps: 32, lsteps: 4, msteps: 12, rain: 0.8 },
   { grass: 1.00, flowers: 1.00, atmos: 0.52, csteps: 40, lsteps: 5, msteps: 14, rain: 1.0 },
@@ -65,7 +66,10 @@ class Game {
     this.tierCooldown = 3;
 
     addEventListener('resize', () => this.onResize());
-    document.addEventListener('visibilitychange', () => { this.clock.getDelta(); });
+    document.addEventListener('visibilitychange', () => {
+      this.clock.getDelta();
+      if (this.audio) this.audio.setSuspended(document.hidden);
+    });
   }
 
   async build() {
@@ -110,6 +114,7 @@ class Game {
     this.flock = new PetalFlock(this.hf, { count: Math.round(num('petals', 240)) });
     this.scene.add(this.flock.mesh);
 
+    this.audio = new Ambience();
     this.input = new Input(this.renderer.domElement);
     this.rig = new CameraRig(this.camera, this.hf);
     this.rig.pos.copy(this.flock.pos).add(new THREE.Vector3(0, 4, 13));
@@ -133,8 +138,8 @@ class Game {
     if (!force && i === this.tier) return;
     this.tier = i;
     const t = TIERS[i];
-    if (this.grass) this.grass.mesh.geometry.instanceCount = Math.round(this.grassBase * t.grass);
-    if (this.grassFar) this.grassFar.mesh.geometry.instanceCount = Math.round(this.grassFarBase * t.grass);
+    if (this.grass) this.grass.setDensityScale(t.grass);
+    if (this.grassFar) this.grassFar.setDensityScale(t.grass);
     if (this.flowers) this.flowers.mesh.geometry.instanceCount = Math.round(this.flowerBase * t.flowers);
     if (this.weather) this.weather.rain.geometry.instanceCount = Math.round(3200 * t.rain);
     if (this.post && !has('atmos')) {
@@ -162,8 +167,18 @@ class Game {
     document.getElementById('weather').addEventListener('click', () => {
       this.showToast(this.weather.next().name);
     });
+    // 声音开关（触屏没有键盘，所以必须有个可点的按钮）
+    const soundBtn = document.getElementById('sound');
+    const toggleSound = () => {
+      this.audio.start();
+      this.audio.setMuted(!this.audio.muted);
+      soundBtn.classList.toggle('off', this.audio.muted);
+    };
+    soundBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleSound(); });
+
     this.input.onKey = (code) => {
-      if (code === 'KeyC') { const p = this.weather.next(); this.showToast(p.name); }
+      if (code === 'KeyM') toggleSound();
+      else if (code === 'KeyC') { const p = this.weather.next(); this.showToast(p.name); }
       else if (code === 'KeyH') hud.classList.toggle('on');
       else if (code === 'KeyP') this.paused = !this.paused;
       else if (/^Digit[1-5]$/.test(code)) {
@@ -258,6 +273,17 @@ class Game {
     this.adapt(dt);
     this.render();
     this.updateHud();
+    if (this.audio && this.audio.started) {
+      this.audio.update(dt, {
+        windStrength: env.uniforms.uWindStrength.value,
+        speed: this.flock ? this.flock.speed : 0,
+        rain: this.weather ? this.weather.rainAmount : 0,
+        flash: this.weather ? this.weather.flash : 0,
+        weatherIndex: this.weather ? this.weather.targetIndex : 0,
+        bloomArea: this.bloomArea,
+        settle: this.rig ? this.rig.settle : 0,
+      });
+    }
   }
 }
 
@@ -310,6 +336,7 @@ game.build().then(() => {
   const hud = document.getElementById('hud');
   const start = document.getElementById('start');
   const begin = () => {
+    game.audio.start();          // 必须在用户手势里创建 AudioContext
     intro.classList.add('hide');
     hud.classList.add('on');
     if (has('shot')) { intro.style.display = 'none'; hud.style.opacity = '1'; }
@@ -317,6 +344,10 @@ game.build().then(() => {
   };
   start.classList.add('on');
   start.addEventListener('click', begin);
+  // 兜底：万一开场界面被跳过，第一次交互时也把声音接上
+  const wake = () => { if (game.audio) game.audio.start(); };
+  addEventListener('pointerdown', wake, { once: true });
+  addEventListener('keydown', wake, { once: true });
   addEventListener('keydown', (e) => {
     if (!intro.classList.contains('hide') && (e.code === 'Space' || e.code === 'Enter')) begin();
   });

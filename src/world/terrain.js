@@ -57,7 +57,12 @@ void main(){
   // 近处叠一层细密噪声，模拟"看不见的草"，让草坪边界自然消融进远景
   float det = fbm2n(vWorld.xz * 1.6, 2) * 0.6 + fbm2n(vWorld.xz * 0.42, 2) * 0.4;
   float detFade = 1.0 - smoothstep(26.0, 130.0, dist);
-  grass *= mix(1.0, 0.80 + 0.44 * det, detFade * 0.9);
+  grass *= mix(1.0, 0.74 + 0.56 * det, detFade * 0.95);
+
+  // 草冠遮蔽：近处真正长着草叶的范围里，把叶片缝隙间的地面压暗，
+  // 否则地面会像"绿地板上插了些草"，显得草很稀。
+  float nearK = 1.0 - smoothstep(18.0, 68.0, dist);
+  grass *= mix(1.0, 0.66, nearK * 0.88);
 
   // 洼地略深、丘顶略亮（廉价 AO / 曲率感）
   float lowland = smoothstep(14.0, -6.0, vWorld.y);
@@ -83,7 +88,7 @@ void main(){
   col += uSunColor * spec * (0.02 + uWetness * 0.16) * sh;
 
   // 逆光边缘的草绒毛感
-  float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+  float rim = pow(clamp(1.0 - clamp(dot(N, V), 0.0, 1.0), 0.0, 1.0), 3.0);
   col += uSunColor * rim * 0.05 * max(dot(uSunDir, -V), 0.0) * sh;
 
   col = applyAtmosphere(col, vWorld, uCamPos);

@@ -45,7 +45,18 @@
     #bloomCount { top:calc(14px + env(safe-area-inset-top, 0px)); right:calc(14px + env(safe-area-inset-right, 0px)); }
     #intro h1 { font-size:48px; }
     #toast { font-size:24px; }
+    #sound { bottom:auto; top:calc(74px + env(safe-area-inset-top, 0px)); right:calc(14px + env(safe-area-inset-right, 0px)); }
   }
+  #sound { position:absolute; bottom:58px; right:26px; width:38px; height:38px; border-radius:50%;
+           border:1px solid rgba(255,255,255,.26); background:rgba(255,255,255,.05); color:#fff;
+           cursor:pointer; pointer-events:auto; padding:0; display:flex; align-items:center;
+           justify-content:center; -webkit-tap-highlight-color:transparent;
+           transition:background .25s ease, opacity .25s ease; }
+  #sound:hover { background:rgba(255,255,255,.14); }
+  #sound .x { display:none; }
+  #sound.off { opacity:.45; }
+  #sound.off .w1, #sound.off .w2 { display:none; }
+  #sound.off .x { display:inline; }
   #toast { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:6;
            color:#fff; font-size:30px; font-weight:200; letter-spacing:.5em; text-indent:.5em;
            text-shadow:0 2px 30px rgba(0,0,0,.6); opacity:0; pointer-events:none;
@@ -86,6 +97,15 @@
 <div id="hud">
   <div class="corner" id="weather"><b>晴</b><span>微风</span></div>
   <div class="corner" id="bloomCount"><b>0</b><span>朵花已绽放</span></div>
+  <button class="corner" id="sound" aria-label="开关声音" title="开关声音（M）">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+         stroke-width="1.7" stroke-linecap="round">
+      <path d="M4 9.4v5.2h3.3L12 18.6V5.4L7.3 9.4H4z" fill="currentColor" stroke="none"/>
+      <path class="w1" d="M15.1 9.3a3.7 3.7 0 0 1 0 5.4"/>
+      <path class="w2" d="M17.7 6.8a7.3 7.3 0 0 1 0 10.4"/>
+      <path class="x" d="M15.6 9.6l4.8 4.8M20.4 9.6l-4.8 4.8"/>
+    </svg>
+  </button>
   <div class="corner" id="hint">
     <span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 拖拽 引导花瓣 &nbsp;·&nbsp;
     <kbd>Shift</kbd> 疾风 &nbsp;·&nbsp; <kbd>空格</kbd> 停驻·近景 &nbsp;·&nbsp;
@@ -101,6 +121,7 @@
   <div id="bar"><i></i></div>
   <div id="status">正在生成大地…</div>
   <button id="start">开 始 旅 途</button>
+  <div class="sub" style="font-size:11px; letter-spacing:.3em; opacity:.34; margin-top:2px;">建 议 开 启 声 音</div>
 </div>
 
 <pre id="err"></pre>

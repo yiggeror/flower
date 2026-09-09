@@ -222,7 +222,7 @@ vec3 windField(vec2 xz){
   float g2 = sin(along * 0.031 + side * 0.017 - t * 0.72);
   float gust = (g1 * 0.55 + g2 * 0.45);
   gust = gust * 0.5 + 0.5;                       // 0..1
-  gust = pow(gust, 1.6);                         // 波峰更锐利，波谷更平静
+  gust = pow(clamp(gust, 0.0, 1.0), 1.6);        // 波峰更锐利；clamp 防止负底数产生 NaN
 
   // 中尺度扰动，打散规则感
   float m = fbm2n(xz * 0.055 + w * t * 0.55, 3);
@@ -236,6 +236,15 @@ vec3 windField(vec2 xz){
 `;
 
 // 线性 → sRGB（最终输出手动做，后期链全程线性 HDR）
+// 非有限值（NaN / Inf）兜底。与 NaN 的任何比较都为 false，所以 abs(c) < 1e5 会挑出它们。
+// GLSL ES 1.0 没有 isnan()，这是最可靠的写法。
+export const SANITIZE = /* glsl */`
+vec3 sanitize(vec3 c){
+  bvec3 ok = lessThan(abs(c), vec3(1e5));
+  return vec3(ok.x ? c.x : 0.0, ok.y ? c.y : 0.0, ok.z ? c.z : 0.0);
+}
+`;
+
 export const COLORSPACE = /* glsl */`
 vec3 linearToSRGB(vec3 c){
   c = max(c, vec3(0.0));
