@@ -21,6 +21,16 @@ const AMBIENCE = [
   { bird: [7, 17],  cricket: 0.26, tone: 0.88, whistle: 0.3 },  // 暮金
 ];
 
+// 可选的真实录音。放进 audio/ 就自动接管对应的层，缺哪个就用哪个的合成版。
+// 文件名固定，格式建议 .mp3（iOS 与安卓都支持）。
+const SAMPLE_FILES = {
+  wind:     'wind.mp3',
+  rain:     'rain.mp3',
+  birds:    'birds.mp3',
+  crickets: 'crickets.mp3',
+  thunder:  'thunder.mp3',
+};
+
 export class Ambience {
   constructor() {
     this.ctx = null;
@@ -31,6 +41,9 @@ export class Ambience {
     this._nextBird = 0;
     this._thunderArmed = true;
     this.birdCount = 0;   // 便于客观检测
+    this.samples = {};       // 已加载并接管的层
+    this.sampleGain = {};
+    this.sampleFilter = {};
   }
 
   // 必须由用户手势触发（浏览器的自动播放策略）
@@ -80,6 +93,78 @@ export class Ambience {
     this._buildCrickets();
 
     this._nextBird = ctx.currentTime + 3.0;
+
+    // file:// 下没法 fetch 同目录文件，单文件版直接走合成
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      this.loadSamples();
+    }
+  }
+
+  /**
+   * 尝试加载真实录音。每一层独立：有文件就接管，没有就继续用合成。
+   * 加载是后台进行的，不阻塞游戏。
+   */
+  async loadSamples(base) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    base = base || './audio/';
+    await Promise.all(Object.keys(SAMPLE_FILES).map(async (key) => {
+      try {
+        const res = await fetch(base + SAMPLE_FILES[key]);
+        if (!res.ok) return;
+        const raw = await res.arrayBuffer();
+        const buf = await ctx.decodeAudioData(raw);
+        if (key === 'thunder') { this.samples.thunder = buf; return; }
+        this.samples[key] = this._makeSeamless(buf, 1.2);
+        this._mountSample(key);
+      } catch (e) {
+        // 没有这个文件（或解码失败）就保持合成，不打扰用户
+      }
+    }));
+  }
+
+  /**
+   * 把一段录音做成无缝循环：把结尾一段等功率交叉淡化到开头，然后裁掉尾巴。
+   * 这样任何一段素材都能循环，不必事先做成 loop-ready。
+   */
+  _makeSeamless(buf, seconds) {
+    const sr = buf.sampleRate;
+    const xf = Math.max(1, Math.min(Math.floor(seconds * sr), Math.floor(buf.length / 3)));
+    const n = buf.length - xf;
+    if (n <= sr * 0.5) return buf;
+    const out = this.ctx.createBuffer(buf.numberOfChannels, n, sr);
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const src = buf.getChannelData(c);
+      const d = out.getChannelData(c);
+      d.set(src.subarray(0, n));
+      for (let i = 0; i < xf; i++) {
+        const k = (i / xf) * Math.PI * 0.5;
+        d[i] = d[i] * Math.sin(k) + src[n + i] * Math.cos(k);
+      }
+    }
+    return out;
+  }
+
+  _mountSample(key) {
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.samples[key];
+    src.loop = true;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    // 风和雨给一个可调的低通，让音色也能随阵风与雨势变化
+    if (key === 'wind' || key === 'rain') {
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass'; f.frequency.value = 3000; f.Q.value = 0.6;
+      src.connect(f); f.connect(g);
+      this.sampleFilter[key] = f;
+    } else {
+      src.connect(g);
+    }
+    g.connect(this.master);
+    if (key !== 'wind') g.connect(this.reverb);
+    src.start();
+    this.sampleGain[key] = g;
   }
 
   // ---- 素材 ----
@@ -251,6 +336,16 @@ export class Ambience {
     const ctx = this.ctx;
     if (!ctx) return;
     const t0 = ctx.currentTime + 0.35 + Math.random() * 1.4;   // 先见闪电，后闻雷声
+    if (this.samples.thunder) {
+      const s2 = ctx.createBufferSource();
+      s2.buffer = this.samples.thunder;
+      s2.playbackRate.value = 0.9 + Math.random() * 0.25;
+      const g2 = ctx.createGain();
+      g2.gain.value = 0.55 + Math.random() * 0.35;
+      s2.connect(g2); g2.connect(this.master); g2.connect(this.reverb);
+      s2.start(t0);
+      return;
+    }
     const src = ctx.createBufferSource();
     src.buffer = this.thunderNoise;
     src.playbackRate.value = 0.35;
@@ -367,21 +462,32 @@ export class Ambience {
     const motion = Math.min(s.speed / 20, 1);
     const gust = this._gust * (0.45 + w * 0.45) + motion * 0.30;
 
-    this.windLowGain.gain.setTargetAtTime(0.032 + gust * 0.072, now, 0.35);
-    this.windHissGain.gain.setTargetAtTime(0.028 + gust * 0.078, now, 0.30);
+    const hasWind = !!this.sampleGain.wind;
+    this.windLowGain.gain.setTargetAtTime(hasWind ? 0 : 0.032 + gust * 0.072, now, 0.35);
+    this.windHissGain.gain.setTargetAtTime(hasWind ? 0 : 0.028 + gust * 0.078, now, 0.30);
     this.windBP.frequency.setTargetAtTime(
       (600 + gust * 1150 + motion * 520) * amb.tone, now, 0.4);
     this.windWhistleGain.gain.setTargetAtTime(
-      Math.max(0, gust - 0.50) * 0.020 * amb.whistle, now, 0.5);
+      hasWind ? 0 : Math.max(0, gust - 0.50) * 0.020 * amb.whistle, now, 0.5);
+    if (hasWind) {
+      this.sampleGain.wind.gain.setTargetAtTime(0.16 + gust * 0.42, now, 0.35);
+      this.sampleFilter.wind.frequency.setTargetAtTime(
+        (1100 + gust * 5200 + motion * 1500) * amb.tone, now, 0.4);
+    }
 
     // ---- 雨：雨势本身也会一阵大一阵小 ----
     const r = Math.max(0, Math.min(1, s.rain));
     if (Math.random() < dt * 0.25) this._rainSwellTarget = 0.62 + Math.random() * 0.55;
     this._rainSwell += (this._rainSwellTarget - this._rainSwell) * Math.min(1, dt * 0.35);
     const rs = r * this._rainSwell;
-    this.rainGain.gain.setTargetAtTime(rs * 0.090, now, 0.7);
-    this.rainDropGain.gain.setTargetAtTime(rs * 0.125, now, 0.7);
-    this.rainFarGain.gain.setTargetAtTime(r * 0.055, now, 1.2);
+    const hasRain = !!this.sampleGain.rain;
+    this.rainGain.gain.setTargetAtTime(hasRain ? 0 : rs * 0.090, now, 0.7);
+    this.rainDropGain.gain.setTargetAtTime(hasRain ? 0 : rs * 0.125, now, 0.7);
+    this.rainFarGain.gain.setTargetAtTime(hasRain ? 0 : r * 0.055, now, 1.2);
+    if (hasRain) {
+      this.sampleGain.rain.gain.setTargetAtTime(rs * 0.85, now, 0.7);
+      this.sampleFilter.rain.frequency.setTargetAtTime(2200 + rs * 5000, now, 0.9);
+    }
 
     // ---- 雷 ----
     if (s.flash > 0.5 && this._thunderArmed) { this.thunder(); this._thunderArmed = false; }
@@ -390,10 +496,18 @@ export class Ambience {
     // ---- 虫声：只在暮色与雨后 ----
     // 注意：Q=22 的窄带只放过约 1% 的噪声功率（约 -20dB），
     // 增益要把这部分补回来，否则虫声等于没有。
-    this.cricketGain.gain.setTargetAtTime(amb.cricket * 0.20 * (1 - r), now, 4.0);
+    const cricketLevel = amb.cricket * (1 - r);
+    this.cricketGain.gain.setTargetAtTime(
+      this.sampleGain.crickets ? 0 : cricketLevel * 0.20, now, 4.0);
+    if (this.sampleGain.crickets) {
+      this.sampleGain.crickets.gain.setTargetAtTime(cricketLevel * 1.1, now, 4.0);
+    }
 
     // ---- 鸟鸣：下雨不叫；风越大越少（鸟会躲起来）----
-    if (amb.bird && r < 0.25) {
+    if (this.sampleGain.birds) {
+      const lvl = (amb.bird && r < 0.25) ? 0.55 / (1 + Math.max(0, w - 1) * 0.6) : 0;
+      this.sampleGain.birds.gain.setTargetAtTime(lvl, now, 2.5);
+    } else if (amb.bird && r < 0.25) {
       if (now > this._nextBird) {
         this.bird();
         const [lo, hi] = amb.bird;

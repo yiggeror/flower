@@ -10,14 +10,22 @@
 
 ---
 
-## 运行
+## 玩
+
+**在线**：https://yiggeror.github.io/flower/ （推到 `main` 后由 GitHub Actions 自动部署）
+
+**单文件**：`dist/flower.html` —— 整个游戏打包成一个 HTML，双击即可运行，
+不需要服务器也不需要联网。站点上也提供在 `/download/flower.html`。
+
+**本地开发**：
 
 ```bash
 npx http-server -p 8080 -c-1 .
 # 打开 http://localhost:8080/
 ```
 
-任何静态服务器都可以（必须用 http:// 而非 file://，因为用到了 ES Module）。
+必须用 http:// 而非 file://，因为源码是拆分的 ES Module。
+（`node build.mjs` 生成的单文件版没有这个限制。）
 
 ## 操作
 
