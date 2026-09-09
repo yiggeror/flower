@@ -141,15 +141,18 @@ export class Ambience {
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.55;
     this.windBP = bp;
+    // 5kHz 以上的沙沙对耳朵是负担，滚掉
+    const hissLP = ctx.createBiquadFilter();
+    hissLP.type = 'lowpass'; hissLP.frequency.value = 4600; hissLP.Q.value = 0.6;
     this.windHissGain = ctx.createGain(); this.windHissGain.gain.value = 0;
     this._loopSource(white, 0.85).connect(bp);
-    bp.connect(this.windHissGain);
+    bp.connect(hissLP); hissLP.connect(this.windHissGain);
     this.windHissGain.connect(this.master);
     this.windHissGain.connect(this.reverb);
 
     // 掠过草尖的那一点高频
     const wh = ctx.createBiquadFilter();
-    wh.type = 'bandpass'; wh.frequency.value = 2900; wh.Q.value = 1.6;
+    wh.type = 'bandpass'; wh.frequency.value = 2200; wh.Q.value = 1.3;
     this.windWhistleBP = wh;
     this.windWhistleGain = ctx.createGain(); this.windWhistleGain.gain.value = 0;
     this._loopSource(white, 1.13).connect(wh);
@@ -158,29 +161,90 @@ export class Ambience {
     this.windWhistleGain.connect(this.reverb);
   }
 
-  // ---- 雨 ----
+  /**
+   * 雨滴层：预先合成一段"雨点噼啪"的循环缓冲。
+   * 一颗雨滴 = 一个快速衰减的正弦混一点噪声。真实的雨之所以像雨而不像嘶声，
+   * 靠的就是这些密集的瞬态。
+   */
+  _dropletBuffer(seconds, perSecond) {
+    const ctx = this.ctx;
+    const sr = ctx.sampleRate;
+    const n = Math.floor(sr * seconds);
+    const buf = ctx.createBuffer(2, n, sr);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      const count = Math.floor(seconds * perSecond);
+      for (let k = 0; k < count; k++) {
+        const pos = (Math.random() * n) | 0;
+        const f = 620 + Math.random() * 2400;
+        const decay = 0.0030 + Math.random() * 0.016;
+        const amp = 0.10 + Math.random() * 0.85;
+        const len = Math.min(Math.floor(decay * 5 * sr), n);
+        const w = (2 * Math.PI * f) / sr;
+        const inv = 1 / (decay * sr);
+        for (let i = 0; i < len; i++) {
+          const j = pos + i;
+          if (j >= n) break;
+          const env = Math.exp(-i * inv);
+          d[j] += amp * env * (Math.sin(w * i) * 0.5 + (Math.random() * 2 - 1) * 0.5);
+        }
+      }
+      // 归一化 + 循环点交叉淡化
+      let peak = 0;
+      for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[i]));
+      const g = peak > 0 ? 0.85 / peak : 1;
+      for (let i = 0; i < n; i++) d[i] *= g;
+      const fade = Math.min(4000, (n / 8) | 0);
+      for (let i = 0; i < fade; i++) {
+        const k = i / fade;
+        d[i] = d[i] * k + d[n - fade + i] * (1 - k);
+      }
+    }
+    return buf;
+  }
+
+  // ---- 雨：中低频的雨幕 + 一颗颗雨滴 + 远处的雨墙 ----
+  // 关键是把 5kHz 以上滚降掉。刺耳感全来自那一段。
   _buildRain() {
     const ctx = this.ctx;
     const white = this._noiseBuffer(5, false);
+
+    // 主体：掐掉超低和超高，只留有"重量"的中频
     const src = this._loopSource(white, 1.0);
-
     const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass'; hp.frequency.value = 1100; hp.Q.value = 0.5;
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 0.35;
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = 0.4;
-
+    hp.type = 'highpass'; hp.frequency.value = 240; hp.Q.value = 0.6;
+    const lp1 = ctx.createBiquadFilter();
+    lp1.type = 'lowpass'; lp1.frequency.value = 4200; lp1.Q.value = 0.7;
+    const lp2 = ctx.createBiquadFilter();
+    lp2.type = 'lowpass'; lp2.frequency.value = 5200; lp2.Q.value = 0.5;
+    const body = ctx.createBiquadFilter();
+    body.type = 'peaking'; body.frequency.value = 1150; body.Q.value = 0.7; body.gain.value = 4.5;
     this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;
-    this.rainHissGain = ctx.createGain(); this.rainHissGain.gain.value = 0;
-    this.rainLowGain = ctx.createGain(); this.rainLowGain.gain.value = 0;
+    src.connect(hp); hp.connect(lp1); lp1.connect(lp2); lp2.connect(body);
+    body.connect(this.rainGain);
+    this.rainGain.connect(this.master);
 
-    src.connect(hp); hp.connect(this.rainGain); this.rainGain.connect(this.master);
-    src.connect(bp); bp.connect(this.rainHissGain);
-    this.rainHissGain.connect(this.master); this.rainHissGain.connect(this.reverb);
-    src.connect(lp); lp.connect(this.rainLowGain); this.rainLowGain.connect(this.master);
+    // 雨滴
+    const drops = this._loopSource(this._dropletBuffer(7, 210), 1.0);
+    const dlp = ctx.createBiquadFilter();
+    dlp.type = 'lowpass'; dlp.frequency.value = 5600; dlp.Q.value = 0.6;
+    this.rainDropGain = ctx.createGain(); this.rainDropGain.gain.value = 0;
+    drops.connect(dlp); dlp.connect(this.rainDropGain);
+    this.rainDropGain.connect(this.master);
+    this.rainDropGain.connect(this.reverb);
+
+    // 远处的雨墙：只剩低频，靠混响推远
+    const src2 = this._loopSource(white, 0.7);
+    const flp = ctx.createBiquadFilter();
+    flp.type = 'lowpass'; flp.frequency.value = 780; flp.Q.value = 0.5;
+    this.rainFarGain = ctx.createGain(); this.rainFarGain.gain.value = 0;
+    src2.connect(flp); flp.connect(this.rainFarGain);
+    this.rainFarGain.connect(this.master);
+    this.rainFarGain.connect(this.reverb);
 
     this.thunderNoise = white;
+    this._rainSwell = 0.6;
+    this._rainSwellTarget = 0.6;
   }
 
   thunder() {
@@ -308,13 +372,16 @@ export class Ambience {
     this.windBP.frequency.setTargetAtTime(
       (600 + gust * 1150 + motion * 520) * amb.tone, now, 0.4);
     this.windWhistleGain.gain.setTargetAtTime(
-      Math.max(0, gust - 0.45) * 0.030 * amb.whistle, now, 0.5);
+      Math.max(0, gust - 0.50) * 0.020 * amb.whistle, now, 0.5);
 
-    // ---- 雨 ----
+    // ---- 雨：雨势本身也会一阵大一阵小 ----
     const r = Math.max(0, Math.min(1, s.rain));
-    this.rainGain.gain.setTargetAtTime(r * 0.085, now, 0.6);
-    this.rainHissGain.gain.setTargetAtTime(r * 0.055, now, 0.6);
-    this.rainLowGain.gain.setTargetAtTime(r * 0.034, now, 0.8);
+    if (Math.random() < dt * 0.25) this._rainSwellTarget = 0.62 + Math.random() * 0.55;
+    this._rainSwell += (this._rainSwellTarget - this._rainSwell) * Math.min(1, dt * 0.35);
+    const rs = r * this._rainSwell;
+    this.rainGain.gain.setTargetAtTime(rs * 0.090, now, 0.7);
+    this.rainDropGain.gain.setTargetAtTime(rs * 0.125, now, 0.7);
+    this.rainFarGain.gain.setTargetAtTime(r * 0.055, now, 1.2);
 
     // ---- 雷 ----
     if (s.flash > 0.5 && this._thunderArmed) { this.thunder(); this._thunderArmed = false; }
